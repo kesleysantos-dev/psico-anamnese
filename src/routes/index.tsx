@@ -34,7 +34,7 @@ type Answers = {
   notes: string;
 };
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 6;
 
 const GENDER_OPTIONS = ["Mulher", "Homem", "Pessoa não binária", "Outro", "Prefiro não informar"];
 
@@ -148,8 +148,15 @@ function Index() {
   }, [step]);
 
   const secondQuestionRef = useRef<HTMLDivElement>(null);
-  const scrollToSecondQuestion = () => {
-    secondQuestionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const thirdQuestionRef = useRef<HTMLDivElement>(null);
+  // Pequeno atraso para a opção marcada aparecer antes de descer até a próxima pergunta
+  const scrollToQuestion = (ref: React.RefObject<HTMLDivElement | null>) => {
+    window.setTimeout(() => {
+      const el = ref.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top + window.scrollY - 24;
+      window.scrollTo({ top, behavior: "smooth" });
+    }, 250);
   };
 
   const message = [
@@ -219,27 +226,18 @@ function Index() {
           {step === 0 && <Welcome a={a} set={set} onStart={() => setStep(1)} />}
 
           {step === 1 && (
-            <Question
-              title="Como você se identifica?"
-              hint="Selecione a opção que melhor te representa."
-            >
-              <Options
-                options={GENDER_OPTIONS.map((o) => ({ label: o }))}
-                value={a.gender}
-                onSelect={(v) => {
-                  set({ gender: v });
-                  setStep(2);
-                }}
-              />
-            </Question>
-          )}
-
-          {step === 2 && (
-            <Question
-              title="Um pouco mais sobre você"
-              hint="Essas informações ajudam a montar seu histórico."
-            >
+            <Question title="Sobre você" hint="Essas informações ajudam a montar seu histórico.">
               <div className="space-y-4">
+                <div>
+                  <span className="mb-2 block text-sm text-muted-foreground">
+                    Como você se identifica?<span className="text-primary"> *</span>
+                  </span>
+                  <Chips
+                    options={GENDER_OPTIONS}
+                    value={a.gender}
+                    onSelect={(v) => set({ gender: v })}
+                  />
+                </div>
                 <Field label="Data de nascimento" required>
                   <input
                     type="date"
@@ -284,15 +282,19 @@ function Index() {
               </div>
               <Next
                 disabled={
-                  !a.birthDate || !a.maritalStatus.trim() || !a.occupation.trim() || !a.city.trim()
+                  !a.gender ||
+                  !a.birthDate ||
+                  !a.maritalStatus.trim() ||
+                  !a.occupation.trim() ||
+                  !a.city.trim()
                 }
-                onClick={() => setStep(3)}
+                onClick={() => setStep(2)}
                 className="mt-5"
               />
             </Question>
           )}
 
-          {step === 3 && (
+          {step === 2 && (
             <Question
               title="O que te traz aqui"
               hint="Queremos entender o que você tem vivido ultimamente."
@@ -311,24 +313,29 @@ function Index() {
                     value={a.reasonDetails}
                     onChange={(e) => set({ reasonDetails: e.target.value })}
                     rows={3}
+                    onBlur={() => {
+                      if (a.reasons.length > 0) scrollToQuestion(secondQuestionRef);
+                    }}
                     placeholder="Se quiser, conte com suas palavras (opcional)..."
                     className={`${inputClass} mt-4 resize-none`}
                   />
                 </Segment>
                 <Divider />
-                <Segment title="Há quanto tempo você se sente assim?">
-                  <Options
-                    options={DURATION.map((d) => ({ label: d }))}
-                    value={a.duration}
-                    onSelect={(v) => set({ duration: v })}
-                  />
-                </Segment>
+                <div ref={secondQuestionRef}>
+                  <Segment title="Há quanto tempo você se sente assim?">
+                    <Options
+                      options={DURATION.map((d) => ({ label: d }))}
+                      value={a.duration}
+                      onSelect={(v) => set({ duration: v })}
+                    />
+                  </Segment>
+                </div>
               </div>
-              <Next disabled={a.reasons.length === 0 || !a.duration} onClick={() => setStep(4)} />
+              <Next disabled={a.reasons.length === 0 || !a.duration} onClick={() => setStep(3)} />
             </Question>
           )}
 
-          {step === 4 && (
+          {step === 3 && (
             <Question title="Seu dia a dia" hint="Não existe resposta certa — só a sua.">
               <div className="space-y-8">
                 <Segment
@@ -340,7 +347,7 @@ function Index() {
                     value={a.impact}
                     onSelect={(v) => {
                       set({ impact: v });
-                      scrollToSecondQuestion();
+                      scrollToQuestion(secondQuestionRef);
                     }}
                   />
                 </Segment>
@@ -355,11 +362,11 @@ function Index() {
                   </Segment>
                 </div>
               </div>
-              <Next disabled={!a.impact || !a.sleep} onClick={() => setStep(5)} />
+              <Next disabled={!a.impact || !a.sleep} onClick={() => setStep(4)} />
             </Question>
           )}
 
-          {step === 5 && (
+          {step === 4 && (
             <Question
               title="Seu histórico de cuidado"
               hint="Isso me ajuda a preparar nosso encontro."
@@ -371,7 +378,7 @@ function Index() {
                     value={a.previousCare}
                     onSelect={(v) => {
                       set({ previousCare: v });
-                      scrollToSecondQuestion();
+                      scrollToQuestion(secondQuestionRef);
                     }}
                   />
                 </Segment>
@@ -381,35 +388,42 @@ function Index() {
                     <Options
                       options={YES_NO.map((o) => ({ label: o }))}
                       value={a.medication}
-                      onSelect={(v) => set({ medication: v })}
+                      onSelect={(v) => {
+                        set({ medication: v });
+                        if (v !== "Sim") scrollToQuestion(thirdQuestionRef);
+                      }}
                     />
                     {a.medication === "Sim" && (
                       <input
                         value={a.medicationDetails}
                         onChange={(e) => set({ medicationDetails: e.target.value })}
+                        autoFocus
+                        onBlur={() => scrollToQuestion(thirdQuestionRef)}
                         placeholder="Quais? (nome e dose, se souber)"
                         className={`${inputClass} mt-4`}
                       />
                     )}
                   </Segment>
-                  <Segment
-                    title="Possui algum diagnóstico ou condição de saúde relevante?"
-                    hint="Opcional. Pode ser de saúde mental ou física."
-                  >
-                    <input
-                      value={a.diagnosis}
-                      onChange={(e) => set({ diagnosis: e.target.value })}
-                      placeholder="Ex.: TDAH, hipotireoidismo, nenhum..."
-                      className={inputClass}
-                    />
-                  </Segment>
+                  <div ref={thirdQuestionRef}>
+                    <Segment
+                      title="Possui algum diagnóstico ou condição de saúde relevante?"
+                      hint="Opcional. Pode ser de saúde mental ou física."
+                    >
+                      <input
+                        value={a.diagnosis}
+                        onChange={(e) => set({ diagnosis: e.target.value })}
+                        placeholder="Ex.: TDAH, hipotireoidismo, nenhum..."
+                        className={inputClass}
+                      />
+                    </Segment>
+                  </div>
                 </div>
               </div>
-              <Next disabled={!a.previousCare || !a.medication} onClick={() => setStep(6)} />
+              <Next disabled={!a.previousCare || !a.medication} onClick={() => setStep(5)} />
             </Question>
           )}
 
-          {step === 6 && (
+          {step === 5 && (
             <Question title="Contexto de vida" hint="Suas respostas são tratadas com sigilo.">
               <div className="space-y-8">
                 <Segment
@@ -421,7 +435,7 @@ function Index() {
                     value={a.familyHistory}
                     onSelect={(v) => {
                       set({ familyHistory: v });
-                      scrollToSecondQuestion();
+                      scrollToQuestion(secondQuestionRef);
                     }}
                   />
                 </Segment>
@@ -436,11 +450,11 @@ function Index() {
                   </Segment>
                 </div>
               </div>
-              <Next disabled={!a.familyHistory || !a.substances} onClick={() => setStep(7)} />
+              <Next disabled={!a.familyHistory || !a.substances} onClick={() => setStep(6)} />
             </Question>
           )}
 
-          {step === 7 && (
+          {step === 6 && (
             <Question title="Últimos detalhes" hint="Estamos quase terminando.">
               <div className="space-y-8">
                 <Segment title="Como você prefere ser atendido(a)?">
@@ -449,7 +463,7 @@ function Index() {
                     value={a.modality}
                     onSelect={(v) => {
                       set({ modality: v });
-                      scrollToSecondQuestion();
+                      scrollToQuestion(secondQuestionRef);
                     }}
                   />
                 </Segment>
@@ -459,32 +473,37 @@ function Index() {
                     <Options
                       options={PERIOD.map((p) => ({ label: p }))}
                       value={a.period}
-                      onSelect={(v) => set({ period: v })}
+                      onSelect={(v) => {
+                        set({ period: v });
+                        scrollToQuestion(thirdQuestionRef);
+                      }}
                     />
                   </Segment>
-                  <Segment
-                    title="Há algo que você gostaria que eu soubesse antes do nosso primeiro atendimento?"
-                    hint="Opcional. Escreva no seu ritmo."
-                  >
-                    <textarea
-                      value={a.notes}
-                      onChange={(e) => set({ notes: e.target.value })}
-                      rows={4}
-                      placeholder="Pode escrever livremente..."
-                      className={`${inputClass} resize-none`}
-                    />
-                  </Segment>
+                  <div ref={thirdQuestionRef}>
+                    <Segment
+                      title="Há algo que você gostaria que eu soubesse antes do nosso primeiro atendimento?"
+                      hint="Opcional. Escreva no seu ritmo."
+                    >
+                      <textarea
+                        value={a.notes}
+                        onChange={(e) => set({ notes: e.target.value })}
+                        rows={4}
+                        placeholder="Pode escrever livremente..."
+                        className={`${inputClass} resize-none`}
+                      />
+                    </Segment>
+                  </div>
                 </div>
               </div>
               <Next
                 label="Concluir"
                 disabled={!a.modality || !a.period}
-                onClick={() => setStep(8)}
+                onClick={() => setStep(7)}
               />
             </Question>
           )}
 
-          {step === 8 && <Done name={a.name} waLink={waLink} />}
+          {step === 7 && <Done name={a.name} waLink={waLink} />}
 
           {step > 0 && step <= TOTAL_STEPS && (
             <button
@@ -646,6 +665,38 @@ function Next({
     >
       {label} <ArrowRight className="h-4 w-4" />
     </button>
+  );
+}
+
+function Chips({
+  options,
+  value,
+  onSelect,
+}: {
+  options: string[];
+  value: string;
+  onSelect: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((o) => {
+        const active = value === o;
+        return (
+          <button
+            key={o}
+            onClick={() => onSelect(o)}
+            aria-pressed={active}
+            className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+              active
+                ? "border-primary bg-secondary"
+                : "border-border bg-background hover:border-primary/60 hover:bg-secondary/50"
+            }`}
+          >
+            {o}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
